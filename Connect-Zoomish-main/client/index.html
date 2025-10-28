@@ -1,0 +1,128 @@
+<!--
+🎯 FILE PURPOSE: Main HTML entry point for AIRA video interview platform
+📍 LOCATION: client/index.html - This is the first file users' browsers load
+🔗 DEPENDENCIES: src/main.jsx (React app), browser's WebRTC APIs
+📤 EXPORTS: HTML page with pre-captured camera/microphone
+📥 IMPORTS: React app from src/main.jsx
+🎮 USAGE: Automatically loaded when user visits http://localhost:3001
+🐛 COMMON ISSUES: Camera/mic permission denied, HTTPS required for some browsers
+👤 BEGINNER NOTES: This runs BEFORE React starts - captures video early for smooth UX
+
+📖 WHAT THIS FILE DOES:
+1. Sets up basic HTML structure
+2. Immediately requests camera/microphone access (before React loads)
+3. Stores the media stream globally for React to use later
+4. Auto-attaches video stream to video elements as they appear
+5. Loads the React application
+
+🔍 KEY CONCEPTS FOR BEGINNERS:
+- getUserMedia(): Browser API to access camera/microphone
+- MediaStream: Object containing video/audio data
+- MutationObserver: Watches for new elements added to the page
+- Async/Await: Modern JavaScript for handling promises
+-->
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>AIRA Interview</title>
+
+    <!-- 
+    🎥 BEGINNER EXPLANATION: Pre-capture Media Strategy
+    
+    WHY: Instead of asking for camera/mic when user joins meeting,
+         we ask immediately when page loads. This makes joining faster!
+    
+    HOW: Capture stream → Store globally → React uses it later
+    -->
+    <script>
+    // 🚀 BEGINNER: This entire script runs immediately when page loads
+    (async () => {
+      try {
+        // 📹 STEP 1: Ask browser for camera and microphone access
+        // This shows the "Allow camera/microphone" popup
+        const s = await navigator.mediaDevices.getUserMedia({ 
+          video: true, // Request camera
+          audio: true  // Request microphone
+        });
+
+        // 🔄 STEP 2: Replace browser's getUserMedia with our pre-captured stream
+        // WHY: So when React asks for camera later, it gets this stream instantly
+        const md = navigator.mediaDevices;
+        const orig = md.getUserMedia?.bind(md); // Save original function
+        Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {
+          configurable: true,
+          value: async () => s // Always return our pre-captured stream
+        });
+
+        // 🌍 STEP 3: Store stream globally so React components can access it
+        // BEGINNER: window.anything makes it available everywhere in your code
+        window.__preLocalStream = s;
+
+        // 🎬 STEP 4: Auto-attach stream to video elements
+        // This function runs whenever a new video element appears on the page
+        const attach = () => {
+          // Look for video elements with these selectors
+          const el =
+            document.querySelector('#wrap-self video') ||    // Main self video
+            document.querySelector('video#local') ||         // Local video by ID
+            document.querySelector('video.local');           // Local video by class
+          
+          // If we found a video element and it doesn't have our stream yet
+          if (el && el.srcObject !== s) {
+            // Set video properties for smooth playback
+            el.muted = true;        // Mute own video (prevent echo)
+            el.playsInline = true;  // Don't go fullscreen on mobile
+            el.autoplay = true;     // Start playing automatically
+            el.srcObject = s;       // Attach our stream
+            el.play?.().catch(()=>{}); // Start playing (ignore errors)
+          }
+        };
+        
+        // Run attach function immediately
+        attach();
+        
+        // 👀 STEP 5: Watch for new video elements being added to the page
+        // MutationObserver watches for DOM changes
+        new MutationObserver(attach).observe(document.documentElement, { 
+          childList: true,  // Watch for new/removed elements
+          subtree: true     // Watch entire document tree
+        });
+        
+        // 🎉 SUCCESS: Log to browser console for debugging
+        console.log('✅ AIRA: Camera/microphone pre-captured successfully!');
+        console.log('📺 Stream ID:', s.id);
+        console.log('🎥 Video tracks:', s.getVideoTracks().length);
+        console.log('🎤 Audio tracks:', s.getAudioTracks().length);
+        
+      } catch (e) {
+        // 🚨 ERROR: User denied permission or camera not available
+        console.warn('AIRA pre-capture gUM failed:', e);
+        console.log('💡 This is normal if user denied camera/mic permission');
+      }
+    })();
+    </script>
+  </head>
+  <body>
+    <!-- 
+    📦 REACT APP CONTAINER
+    This div is where the entire React application will be rendered
+    React will replace this empty div with all the video call interface
+    -->
+    <div id="root"></div>
+    
+    <!-- 
+    🎯 REACT APP ENTRY POINT
+    This loads the main React application from src/main.jsx
+    
+    BEGINNER NOTES:
+    - In development: Vite serves this from src/main.jsx
+    - In production: Vite builds this into /assets/*.js files
+    - type="module": Uses modern JavaScript module system
+    -->
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
+

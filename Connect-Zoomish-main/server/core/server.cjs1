@@ -1,0 +1,105 @@
+// server.cjs — single process for app + signaling + TURN creds
+const http = require('http');
+const path = require('path');
+const express = require('express');
+const cors = require('cors');
+const crypto = require('crypto');
+const { Server } = require('socket.io');
+
+const PORT        = process.env.PORT || 3001;
+const TURN_SECRET = process.env.TURN_SECRET; // REQUIRED
+const TURN_HOST   = process.env.TURN_HOST   || 'turn.airahr.ai';
+const TURN_REALM  = process.env.TURN_REALM  || 'turn.airahr.ai';
+const TURN_TTL    = parseInt(process.env.TURN_TTL || '3600', 10);
+
+if (!TURN_SECRET) {
+  console.error('ERROR: env TURN_SECRET is required'); process.exit(1);
+}
+
+const app = express();
+app.use(cors({ origin: true, credentials: true }));
+app.use(express.json());
+
+// ---- TURN credentials (REST) ----
+app.get('/turn-credentials', (req, res) => {
+  const name = String(req.query.name || 'browser');
+  const now = Math.floor(Date.now() / 1000);
+  const username = `${now + TURN_TTL}:${name}`;
+  const credential = crypto.createHmac('sha1', TURN_SECRET).update(username).digest('base64');
+  const iceServers = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: [`turn:${TURN_HOST}:3478?transport=udp`, `turn:${TURN_HOST}:3478?transport=tcp`], username, credential }
+  ];
+  res.json({ username, credential, ttl: TURN_TTL, realm: TURN_REALM, iceServers });
+});
+
+// ---- Serve built SPA (client/dist) ----
+const staticDir = path.join(__dirname, 'client', 'dist');
+app.use(express.static(staticDir));
+
+// SPA fallback
+app.get('*', (req, res) => res.sendFile(path.join(staticDir, 'index.html')));
+
+// ---- Socket.IO signaling ----
+const server = http.createServer(app);
+const io = new Server(server, { cors: { origin: true, credentials: true } });
+
+// simple room state
+const rooms = new Map();
+const snap = (rid) => {
+  const r = rooms.get(rid);
+  if (!r) return { participants: [], chatEnabled: true, locked: false };
+  const participants = Array.from(r.participants.entries()).map(([id, meta]) => ({ id, ...meta }));
+  return { participants, chatEnabled: !!r.chatEnabled, locked: !!r.locked };
+};
+
+io.on('connection', (socket) => {
+  let currentRoom = null;
+
+  socket.on('join', ({ roomId, name, role }) => {
+    currentRoom = roomId || 'demo-room';
+    if (!rooms.has(currentRoom)) rooms.set(currentRoom, { participants: new Map(), locked: false, chatEnabled: true });
+    rooms.get(currentRoom).participants.set(socket.id, { name, role, live: true, videoOff: false });
+    socket.join(currentRoom);
+    const others = Array.from(rooms.get(currentRoom).participants.keys()).filter(id => id !== socket.id);
+    socket.emit('join-ok', { roomId: currentRoom, others });
+    socket.to(currentRoom).emit('presence', { type: 'joined', socketId: socket.id, name, role });
+    io.to(currentRoom).emit('room:state', snap(currentRoom));
+  });
+
+  socket.on('leave', ({ roomId }) => {
+    const rid = roomId || currentRoom;
+    const r = rooms.get(rid);
+    if (r) {
+      r.participants.delete(socket.id);
+      socket.leave(rid);
+      socket.to(rid).emit('presence', { type: 'left', socketId: socket.id });
+      io.to(rid).emit('room:state', snap(rid));
+      if (r.participants.size === 0) rooms.delete(rid);
+    }
+    currentRoom = null;
+  });
+
+  socket.on('webrtc:offer',  ({ to, sdp }) => io.to(to).emit('webrtc:offer',  { from: socket.id, sdp }));
+  socket.on('webrtc:answer', ({ to, sdp }) => io.to(to).emit('webrtc:answer', { from: socket.id, sdp }));
+  socket.on('webrtc:ice',    ({ to, ice }) => io.to(to).emit('webrtc:ice',    { from: socket.id, ice }));
+
+  socket.on('chat:send', ({ roomId, message }) => {
+    const meta = rooms.get(currentRoom)?.participants.get(socket.id) || {};
+    io.to(currentRoom).emit('chat:recv', { id: socket.id, name: meta.name || 'anon', role: meta.role || 'guest', message });
+  });
+
+  socket.on('disconnect', () => {
+    if (!currentRoom) return;
+    const r = rooms.get(currentRoom);
+    if (r) {
+      r.participants.delete(socket.id);
+      socket.to(currentRoom).emit('presence', { type: 'left', socketId: socket.id });
+      io.to(currentRoom).emit('room:state', snap(currentRoom));
+      if (r.participants.size === 0) rooms.delete(currentRoom);
+    }
+  });
+});
+
+server.listen(PORT, () => console.log('AIRA app + signaling on :' + PORT));
+

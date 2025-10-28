@@ -1,0 +1,69 @@
+<!--
+🎯 FILE PURPOSE: Simple test page for bots - minimal interface for automated testing
+📍 LOCATION: room.html - Root directory, served at http://localhost:3001/room.html
+🔗 DEPENDENCIES: None (pure HTML/CSS/JavaScript)
+📤 EXPORTS: Basic HTML page with join/leave/speak buttons
+📥 IMPORTS: None (self-contained)
+🎮 USAGE: Used by bots for testing, not for real users
+🐛 COMMON ISSUES: None (very simple, no complex functionality)
+👤 BEGINNER NOTES: This is like a "training room" for bots to practice
+
+📖 WHAT THIS FILE DOES:
+1. Provides a simple HTML interface with 3 buttons
+2. Logs button clicks to screen and browser console
+3. Used by automation bots for testing basic functionality
+4. No actual video/audio - just simulates user interactions
+
+🔍 KEY CONCEPTS FOR BEGINNERS:
+- Legacy Code: Old code kept for compatibility/testing
+- Stub Functions: Functions that pretend to do something (for testing)
+- Bot Testing: Automated programs testing the interface
+- Event Handlers: JavaScript code that runs when buttons are clicked
+-->
+
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AIRA Legacy Room</title>
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; margin: 2rem; }
+    button { padding: 0.6rem 1rem; margin-right: 0.5rem; }
+    #log { margin-top: 1rem; white-space: pre-wrap; background:#f7f7f7; padding: 1rem; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <h2>AIRA Legacy Room</h2>
+  <!-- 
+  📝 BEGINNER EXPLANATION: 
+  This page is kept for bot testing. It's much simpler than the main React app
+  but provides basic buttons that bots can click to test their functionality.
+  -->
+  <p>room.html kept for bot testing.</p>
+  <div>
+    <!-- 🎯 TEST BUTTONS: Simple interface for bots to interact with -->
+    <button id="join">Join</button>     <!-- Simulates joining a room -->
+    <button id="leave">Leave</button>   <!-- Simulates leaving a room -->
+    <button id="speakBtn">Speak</button> <!-- Simulates speaking/audio test -->
+  </div>
+  
+  <!-- 📝 LOG AREA: Shows what happened when buttons are clicked -->
+  <div id="log"></div>
+  
+  <script>
+    // 📋 LOGGING FUNCTION: Writes messages to both screen and browser console
+    // BEGINNER: This helps developers see what's happening during tests
+    const log = (...a) => { 
+      document.getElementById('log').textContent += a.join(' ') + "\n"; 
+      console.log(...a); 
+    };
+    
+    // 🎮 BUTTON EVENT HANDLERS: What happens when buttons are clicked
+    // BEGINNER: These are "stub" functions - they just log messages instead of doing real work
+    document.getElementById('join').onclick = () => log('joined (legacy stub)');
+    document.getElementById('leave').onclick = () => log('left (legacy stub)');
+    document.getElementById('speakBtn').onclick = () => log('speak (legacy stub)');
+  </script>
+</body>
+</html>
